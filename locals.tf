@@ -25,6 +25,7 @@ locals {
     #     api_secret = data.external.env.result["api_secret"]
     # }
 
+    public_ssh_key = var.public_ssh_key!="" ? var.public_ssh_key : data.external.env.result["public_ssh_key"]
     username = var.username!="" ? var.username : data.external.env.result["user"]
     resource_prefix = var.resource_prefix!="" ? var.resource_prefix : local.username
 }

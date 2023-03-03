@@ -29,6 +29,13 @@ if which -s git; then
 fi
 CURRENT_DATETIME=$(date -Iseconds)
 
+# I prefer ed25519 keys if existing and fall back to RSA
+PUBLIC_SSH_KEY=""
+if [ -f "${HOME}/.ssh/id_ed25519.pub" ]; then
+  PUBLIC_SSH_KEY=$(<"${HOME}/.ssh/id_ed25519.pub")
+elif [ -f "${HOME}/.ssh/id_rsa.pub" ]; then
+  PUBLIC_SSH_KEY=$(<"${HOME}/.ssh/id_rsa.pub")
+fi
 
 # Change the contents of this output to get the environment variables
 # of interest. The output must be valid JSON, with strings for both
@@ -41,7 +48,8 @@ if [ -z ${CONFLUENT_CLOUD_API_KEY} -o -z ${CONFLUENT_CLOUD_API_SECRET}]; then
     "owner_fullname": "${REALNAME}",
     "owner_email": "${USER}@confluent.io",
     "provenance": "${PROVENANCE}",
-    "current_datetime": "${CURRENT_DATETIME}"
+    "current_datetime": "${CURRENT_DATETIME}",
+    "public_ssh_key": "${PUBLIC_SSH_KEY}"
   }
 EOF
 else
@@ -53,7 +61,8 @@ else
     "provenance": "${PROVENANCE}",
     "current_datetime": "${CURRENT_DATETIME}",
     "api_key": "${CONFLUENT_CLOUD_API_KEY}",
-    "api_secret": "${CONFLUENT_CLOUD_API_SECRET}"
+    "api_secret": "${CONFLUENT_CLOUD_API_SECRET}",
+    "public_ssh_key": "${PUBLIC_SSH_KEY}"
   }
 EOF
 fi

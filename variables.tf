@@ -60,3 +60,15 @@ variable "resource_prefix" {
 #     type = string
 #     default = var.env.OWNER
 # }
+
+variable "vpn_base_domain" {
+    description = "The base domain used for creating the vpn gateway SSL certificate. Optional, does not have to be a valid domain"
+    type = string
+    default = "acme.invalid"
+}
+
+variable "public_ssh_key" {
+    type = string
+    default = ""
+    description = "Public SSH key to use. If not specified, use either $HOME/.ssh/id_ed25519.pub or if that does not exist: $HOME/.ssh/id_rsa.pub"
+}
