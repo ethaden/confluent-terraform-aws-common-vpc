@@ -1,11 +1,11 @@
 module "terraform_pki" {
     source = "github.com/ethaden/terraform-local-pki.git"
 
-    cert_path = "./generated/client_vpn_pki"
+    cert_path = "${var.generated_files_path}/client_vpn_pki"
     organization = "Confluent Inc"
     ca_common_name = "Confluent Inc ${local.username} Test CA"
     server_names = { "vpn-gateway": "vpn-gateway.${var.vpn_base_domain}" }
-    client_names = { "${local.username}-laptop": "${local.username}-laptop.${var.vpn_base_domain}" }
+    client_names = local.vpn_client_names_to_domain
     # Unfortunately, AWS Client VPN Endpoints only support RSA with max. 2048 bits
     algorithm = "RSA"
     rsa_bits = 2048
@@ -58,8 +58,8 @@ resource "aws_default_security_group" "sg_default" {
   }
 }
 
-# Import existing: terraform import aws_subnet.subnet_dualstack_1 <AWS Resource ID>
-resource "aws_subnet" "subnet_dualstack_1" {
+# Import existing: terraform import aws_subnet.subnet_dualstack_1a <AWS Resource ID>
+resource "aws_subnet" "subnet_dualstack_1a" {
   vpc_id     = aws_vpc.vpc_dualstack.id
   cidr_block = "${cidrsubnet(aws_vpc.vpc_dualstack.cidr_block, 8, 0)}"
   ipv6_cidr_block   = "${cidrsubnet(aws_vpc.vpc_dualstack.ipv6_cidr_block, 8, 0)}"
@@ -77,7 +77,7 @@ resource "aws_subnet" "subnet_dualstack_1" {
   }
 }
 
-resource "aws_subnet" "subnet_dualstack_2" {
+resource "aws_subnet" "subnet_dualstack_1b" {
   vpc_id     = aws_vpc.vpc_dualstack.id
   cidr_block = "${cidrsubnet(aws_vpc.vpc_dualstack.cidr_block, 8, 1)}"
   ipv6_cidr_block   = "${cidrsubnet(aws_vpc.vpc_dualstack.ipv6_cidr_block, 8, 1)}"
@@ -95,7 +95,7 @@ resource "aws_subnet" "subnet_dualstack_2" {
   }
 }
 
-resource "aws_subnet" "subnet_dualstack_3" {
+resource "aws_subnet" "subnet_dualstack_1c" {
   vpc_id     = aws_vpc.vpc_dualstack.id
   cidr_block = "${cidrsubnet(aws_vpc.vpc_dualstack.cidr_block, 8, 2)}"
   ipv6_cidr_block   = "${cidrsubnet(aws_vpc.vpc_dualstack.ipv6_cidr_block, 8, 2)}"
@@ -150,8 +150,7 @@ resource "aws_route_table" "rtb_dualstack" {
 # Import existing: terraform import aws_default_network_acl.acl_default <AWS Resource ID>
 resource "aws_default_network_acl" "acl_default" {
   default_network_acl_id = aws_vpc.vpc_dualstack.default_network_acl_id
-  subnet_ids = [ aws_subnet.subnet_dualstack_1.id, aws_subnet.subnet_dualstack_2.id, aws_subnet.subnet_dualstack_3.id ]
-
+  subnet_ids = [ aws_subnet.subnet_dualstack_1a.id, aws_subnet.subnet_dualstack_1b.id, aws_subnet.subnet_dualstack_1c.id ]
   egress {
     protocol = "-1"
     rule_no = 100
@@ -174,6 +173,35 @@ resource "aws_default_network_acl" "acl_default" {
     icmp_type  = 0
   }
 
+  # Generate IPv4 ingress for for the following tcp ports: 22 (ssh), 80 (http), 443 (https)
+  dynamic "ingress" {
+    for_each = {1: 22, 2: 80, 3: 443}
+    content {
+      protocol = "tcp"
+      rule_no    = ingress.key
+      action     = "allow"
+      cidr_block = "0.0.0.0/0"
+      from_port  = ingress.value
+      to_port    = ingress.value
+      icmp_code  = 0
+      icmp_type  = 0
+    }
+  }
+
+  # Generate IPv6 ingress for for the following tcp ports: 22 (ssh), 80 (http), 443 (https)
+  dynamic "ingress" {
+    for_each = {20: 22, 21: 80, 22: 443}
+    content {
+      protocol = "tcp"
+      rule_no    = ingress.key
+      action     = "allow"
+      ipv6_cidr_block = "::/0"
+      from_port  = ingress.value
+      to_port    = ingress.value
+      icmp_code  = 0
+      icmp_type  = 0
+    }
+  }
   ingress {
     protocol = "-1"
     rule_no    = 100
@@ -203,26 +231,16 @@ resource "aws_default_network_acl" "acl_default" {
 
 # For enabling internet access, I assign each subnet to the second router table
 resource "aws_route_table_association" "subet_assoc_1" {
- subnet_id      = aws_subnet.subnet_dualstack_1.id
+ subnet_id      = aws_subnet.subnet_dualstack_1a.id
  route_table_id = aws_route_table.rtb_dualstack.id
 }
 resource "aws_route_table_association" "subet_assoc_2" {
- subnet_id      = aws_subnet.subnet_dualstack_2.id
+ subnet_id      = aws_subnet.subnet_dualstack_1b.id
  route_table_id = aws_route_table.rtb_dualstack.id
 }
 resource "aws_route_table_association" "subet_assoc_3" {
- subnet_id      = aws_subnet.subnet_dualstack_3.id
+ subnet_id      = aws_subnet.subnet_dualstack_1c.id
  route_table_id = aws_route_table.rtb_dualstack.id
-}
-
-
-output "pki_ca_key" {
-    sensitive = true
-    value = module.terraform_pki.ca_cert.private_key_pem
-}
-
-output "pki_laptop_cert" {
-    value = module.terraform_pki.client_certs["${local.username}-laptop"].cert_pem
 }
 
 # Upload all our custom certificates including the CA certificate to AWS
@@ -283,36 +301,36 @@ resource "aws_ec2_client_vpn_endpoint" "vpn" {
 # VPN clients are authorized to access everything accessible via the VPN
 resource "aws_ec2_client_vpn_authorization_rule" "vpn_auth_rule" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  target_network_cidr    = aws_subnet.subnet_dualstack_1.cidr_block
+  target_network_cidr    = aws_subnet.subnet_dualstack_1a.cidr_block
   authorize_all_groups   = true
 }
 
 resource "aws_ec2_client_vpn_authorization_rule" "vpn_auth_rule_2" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  target_network_cidr    = aws_subnet.subnet_dualstack_2.cidr_block
+  target_network_cidr    = aws_subnet.subnet_dualstack_1b.cidr_block
   authorize_all_groups   = true
 }
 
 resource "aws_ec2_client_vpn_authorization_rule" "vpn_auth_rule_3" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  target_network_cidr    = aws_subnet.subnet_dualstack_3.cidr_block
+  target_network_cidr    = aws_subnet.subnet_dualstack_1c.cidr_block
   authorize_all_groups   = true
 }
 
 # Associate the vpn with the subnet in the vpc. This will also create a route
 resource "aws_ec2_client_vpn_network_association" "vpn_network_association_1" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  subnet_id              = aws_subnet.subnet_dualstack_1.id
+  subnet_id              = aws_subnet.subnet_dualstack_1a.id
 }
 
 resource "aws_ec2_client_vpn_network_association" "vpn_network_association_2" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  subnet_id              = aws_subnet.subnet_dualstack_2.id
+  subnet_id              = aws_subnet.subnet_dualstack_1b.id
 }
 
 resource "aws_ec2_client_vpn_network_association" "vpn_network_association_3" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  subnet_id              = aws_subnet.subnet_dualstack_3.id
+  subnet_id              = aws_subnet.subnet_dualstack_1c.id
 }
 
 resource aws_route53_resolver_endpoint vpn_dns {
@@ -321,14 +339,14 @@ resource aws_route53_resolver_endpoint vpn_dns {
    security_group_ids = [aws_security_group.vpn_dns_sg.id]
 
    ip_address {
-     subnet_id = aws_subnet.subnet_dualstack_1.id
+     subnet_id = aws_subnet.subnet_dualstack_1a.id
    }
    ip_address {
-     subnet_id = aws_subnet.subnet_dualstack_2.id
+     subnet_id = aws_subnet.subnet_dualstack_1b.id
    }
 
    ip_address {
-     subnet_id = aws_subnet.subnet_dualstack_3.id
+     subnet_id = aws_subnet.subnet_dualstack_1c.id
    }
   tags = {
     Name = "${local.resource_prefix}-common"
@@ -352,6 +370,32 @@ resource aws_security_group vpn_dns_sg {
      ipv6_cidr_blocks = ["::/0"]
    }
  }
+
+# data "template_file" "aws_openvpn_configs" {
+#   for_each = client_names
+#   template = "${file("${path.module}/templates/aws-openvpn-config.tpl")}"
+#   vars = {
+#     ca_cert_pem = "${module.terraform_pki.ca_cert.cert_pem}"
+#     client_cert_pem = module.terraform_pki.client_certs[each.key].cert_pem
+#     client_key_pem = module.terraform_pki.client_keys[each.key].private_key_pem
+#   }
+# }
+
+resource "local_sensitive_file" "aws_openvpn_config_files" {
+  for_each = toset(local.vpn_client_names)
+
+  #content  = template_file.aws_openvpn_configs[each.key].rendered
+  content = templatefile("${path.module}/templates/aws-openvpn-config.tpl",
+  {
+    vpn_gateway_endpoint = aws_ec2_client_vpn_endpoint.vpn.dns_name,
+    ca_cert_pem = "${module.terraform_pki.ca_cert.cert_pem}",
+    client_cert_pem = module.terraform_pki.client_certs[each.key].cert_pem,
+    client_key_pem = module.terraform_pki.client_keys[each.key].private_key_pem
+  }
+  )
+  filename = "${var.generated_files_path}/openvpn_config_files/openvpn-config-${each.key}.ovpn"
+}
+
 
 output "vpn-gateway-dns-name" {
     value = aws_ec2_client_vpn_endpoint.vpn.dns_name
@@ -388,16 +432,16 @@ output vpc_dualstack {
   value = aws_vpc.vpc_dualstack
 }
 
-output subnet_dualstack_1 {
-  value = aws_subnet.subnet_dualstack_1
+output subnet_dualstack_1a {
+  value = aws_subnet.subnet_dualstack_1a
 }
 
-output subnet_dualstack_2 {
-  value = aws_subnet.subnet_dualstack_2
+output subnet_dualstack_1b {
+  value = aws_subnet.subnet_dualstack_1b
 }
 
-output subnet_dualstack_3 {
-  value = aws_subnet.subnet_dualstack_3
+output subnet_dualstack_1c {
+  value = aws_subnet.subnet_dualstack_1c
 }
 
 output "ssh_key_default" {

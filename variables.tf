@@ -67,8 +67,20 @@ variable "vpn_base_domain" {
     default = "acme.invalid"
 }
 
+variable "vpn_client_names" {
+    description = "List of client names (no whitespace allowed) to generate VPN client certificates for. If empty, generates just one certificate for the current username"
+    type = list(string)
+    default = []
+}
+
 variable "public_ssh_key" {
     type = string
     default = ""
     description = "Public SSH key to use. If not specified, use either $HOME/.ssh/id_ed25519.pub or if that does not exist: $HOME/.ssh/id_rsa.pub"
+}
+
+variable "generated_files_path" {
+    description = "The main path to write generated files to"
+    type = string
+    default = "./generated"
 }
