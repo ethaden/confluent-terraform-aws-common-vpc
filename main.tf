@@ -202,11 +202,24 @@ resource "aws_default_network_acl" "acl_default" {
       icmp_type  = 0
     }
   }
+  # Allow ingress vom VPN
   ingress {
     protocol = "-1"
-    rule_no    = 100
+    rule_no    = 97
     action     = "allow"
-    cidr_block = "0.0.0.0/0"
+    cidr_block = aws_ec2_client_vpn_endpoint.vpn.client_cidr_block
+    from_port  = 0
+    to_port    = 0
+    icmp_code  = 0
+    icmp_type  = 0
+  }
+
+  # Allow everything within the VPC
+  ingress {
+    protocol = "-1"
+    rule_no    = 98
+    action     = "allow"
+    cidr_block = aws_vpc.vpc_dualstack.cidr_block
     from_port  = 0
     to_port    = 0
     icmp_code  = 0
@@ -215,14 +228,34 @@ resource "aws_default_network_acl" "acl_default" {
 
   ingress {
     protocol = "-1"
-    rule_no    = 101
+    rule_no    = 99
     action     = "allow"
-    ipv6_cidr_block = "::/0"
+    ipv6_cidr_block = aws_vpc.vpc_dualstack.ipv6_cidr_block
     from_port  = 0
     to_port    = 0
     icmp_code  = 0
     icmp_type  = 0
-  }
+  }  # ingress {
+  #   protocol = "-1"
+  #   rule_no    = 100
+  #   action     = "allow"
+  #   cidr_block = "0.0.0.0/0"
+  #   from_port  = 0
+  #   to_port    = 0
+  #   icmp_code  = 0
+  #   icmp_type  = 0
+  # }
+
+  # ingress {
+  #   protocol = "-1"
+  #   rule_no    = 101
+  #   action     = "allow"
+  #   ipv6_cidr_block = "::/0"
+  #   from_port  = 0
+  #   to_port    = 0
+  #   icmp_code  = 0
+  #   icmp_type  = 0
+  # }
 
   tags = {
     Name = "${local.resource_prefix}-common"
