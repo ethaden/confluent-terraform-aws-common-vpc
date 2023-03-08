@@ -28,6 +28,7 @@ locals {
     public_ssh_key = var.public_ssh_key!="" ? var.public_ssh_key : data.external.env.result["public_ssh_key"]
     username = var.username!="" ? var.username : data.external.env.result["user"]
     resource_prefix = var.resource_prefix!="" ? var.resource_prefix : local.username
+    private_hostedzone_vpc = var.private_hostedzone_vpc!="" ? var.private_hostedzone_vpc : "${local.resource_prefix}.internal"
     vpn_client_names = length(var.vpn_client_names)!=0 ? var.vpn_client_names: [local.username]
     vpn_client_names_to_domain = { for client_name in local.vpn_client_names: client_name => "${client_name}.${var.vpn_base_domain}" }
 }

@@ -56,6 +56,12 @@ variable "resource_prefix" {
     description = "This string will be used as prefix for generated resources. Default is to use the username"
 }
 
+variable "private_hostedzone_vpc" {
+    type = string
+    default = ""
+    description = "A private hosted zone in Route 53 for this VPC which can be used to provide internal names to EC2 instances and similar. If not set: <local.resource_prefix>.internal"
+}
+
 # variable "owner_email" {
 #     type = string
 #     default = var.env.OWNER

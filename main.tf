@@ -276,6 +276,14 @@ resource "aws_route_table_association" "subet_assoc_3" {
  route_table_id = aws_route_table.rtb_dualstack.id
 }
 
+resource "aws_route53_zone" "private_hostedzone_vpc" {
+  name = local.private_hostedzone_vpc
+
+  vpc {
+    vpc_id = aws_vpc.vpc_dualstack.id
+  }
+}
+
 # Upload all our custom certificates including the CA certificate to AWS
 resource "aws_acm_certificate" "ca_cert" {
   private_key      = module.terraform_pki.ca_cert.private_key_pem
@@ -317,6 +325,11 @@ resource "aws_ec2_client_vpn_endpoint" "vpn" {
   split_tunnel = true
   server_certificate_arn = aws_acm_certificate.vpn_gw_cert.arn
 
+   dns_servers = [
+     aws_route53_resolver_endpoint.vpn_dns.ip_address.*.ip[0], 
+     aws_route53_resolver_endpoint.vpn_dns.ip_address.*.ip[1],
+     aws_route53_resolver_endpoint.vpn_dns.ip_address.*.ip[2]
+   ]
   authentication_options {
     type = "certificate-authentication"
     root_certificate_chain_arn = aws_acm_certificate.ca_cert.arn
@@ -366,7 +379,7 @@ resource "aws_ec2_client_vpn_network_association" "vpn_network_association_3" {
   subnet_id              = aws_subnet.subnet_dualstack_1c.id
 }
 
-resource aws_route53_resolver_endpoint vpn_dns {
+resource aws_route53_resolver_endpoint "vpn_dns" {
    name = "vpn-dns-access"
    direction = "INBOUND"
    security_group_ids = [aws_security_group.vpn_dns_sg.id]
@@ -386,7 +399,7 @@ resource aws_route53_resolver_endpoint vpn_dns {
   }
  }
 
-resource aws_security_group vpn_dns_sg {
+resource aws_security_group "vpn_dns_sg" {
    name = "${local.resource_prefix}-common"
    vpc_id = aws_vpc.vpc_dualstack.id
    ingress {
@@ -479,4 +492,8 @@ output subnet_dualstack_1c {
 
 output "ssh_key_default" {
   value = aws_key_pair.ssh_key_default
+}
+
+output "private_hostedzone_vpc" {
+  value = aws_route53_zone.private_hostedzone_vpc
 }
