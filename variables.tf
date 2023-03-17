@@ -1,9 +1,11 @@
-# Recommendation: Overwrite the default in tfvars or by specify an environment variable TF_VAR_aws_region
+
+# Recommendation: Overwrite the default in tfvars or stick with the automatic default
 variable "tf_last_updated" {
     type = string
     default = ""
     description = "Set this (e.g. in terraform.tfvars) to set the value of the tf_last_updated tag for all resources. If unset, the current date/time is used automatically."
 }
+# Recommendation: Overwrite the default in tfvars or by specify an environment variable TF_VAR_aws_region
 variable "aws_region" {
     type = string
     default = "eu-central-1"
