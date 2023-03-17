@@ -39,13 +39,23 @@ resource "aws_default_security_group" "sg_default" {
     to_port   = 0
   }
 
+  # ingress {
+  #   description = ""
+  #   protocol  = -1
+  #   from_port = 0
+  #   to_port   = 0
+  #   cidr_blocks = ["0.0.0.0/0"]
+  #   ipv6_cidr_blocks = ["::/0"]
+  # }
+
+  # The default ingress allows connections only from within the VPC.
   ingress {
     description = ""
     protocol  = -1
     from_port = 0
     to_port   = 0
-    cidr_blocks = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
+    cidr_blocks = [aws_vpc.vpc_dualstack.cidr_block]
+    ipv6_cidr_blocks = [aws_vpc.vpc_dualstack.ipv6_cidr_block]
   }
 
   egress {
@@ -148,6 +158,8 @@ resource "aws_route_table" "rtb_dualstack" {
 }
 
 # Import existing: terraform import aws_default_network_acl.acl_default <AWS Resource ID>
+# Note: Network ACLs are stateless. For a TCP connections, both outgoing and incoming packets have to be allowed explicitly!
+# Thus, I will allow all traffic and narrow down security using security groups instead.
 resource "aws_default_network_acl" "acl_default" {
   default_network_acl_id = aws_vpc.vpc_dualstack.default_network_acl_id
   subnet_ids = [ aws_subnet.subnet_dualstack_1a.id, aws_subnet.subnet_dualstack_1b.id, aws_subnet.subnet_dualstack_1c.id ]
@@ -173,53 +185,11 @@ resource "aws_default_network_acl" "acl_default" {
     icmp_type  = 0
   }
 
-  # Generate IPv4 ingress for for the following tcp ports: 22 (ssh), 80 (http), 443 (https)
-  dynamic "ingress" {
-    for_each = {1: 22, 2: 80, 3: 443}
-    content {
-      protocol = "tcp"
-      rule_no    = ingress.key
-      action     = "allow"
-      cidr_block = "0.0.0.0/0"
-      from_port  = ingress.value
-      to_port    = ingress.value
-      icmp_code  = 0
-      icmp_type  = 0
-    }
-  }
-
-  # Generate IPv6 ingress for for the following tcp ports: 22 (ssh), 80 (http), 443 (https)
-  dynamic "ingress" {
-    for_each = {20: 22, 21: 80, 22: 443}
-    content {
-      protocol = "tcp"
-      rule_no    = ingress.key
-      action     = "allow"
-      ipv6_cidr_block = "::/0"
-      from_port  = ingress.value
-      to_port    = ingress.value
-      icmp_code  = 0
-      icmp_type  = 0
-    }
-  }
-  # Allow ingress vom VPN
-  ingress {
+ingress {
     protocol = "-1"
-    rule_no    = 97
+    rule_no    = 100
     action     = "allow"
-    cidr_block = aws_ec2_client_vpn_endpoint.vpn.client_cidr_block
-    from_port  = 0
-    to_port    = 0
-    icmp_code  = 0
-    icmp_type  = 0
-  }
-
-  # Allow everything within the VPC
-  ingress {
-    protocol = "-1"
-    rule_no    = 98
-    action     = "allow"
-    cidr_block = aws_vpc.vpc_dualstack.cidr_block
+    cidr_block = "0.0.0.0/0"
     from_port  = 0
     to_port    = 0
     icmp_code  = 0
@@ -228,34 +198,14 @@ resource "aws_default_network_acl" "acl_default" {
 
   ingress {
     protocol = "-1"
-    rule_no    = 99
+    rule_no    = 101
     action     = "allow"
-    ipv6_cidr_block = aws_vpc.vpc_dualstack.ipv6_cidr_block
+    ipv6_cidr_block = "::/0"
     from_port  = 0
     to_port    = 0
     icmp_code  = 0
     icmp_type  = 0
-  }  # ingress {
-  #   protocol = "-1"
-  #   rule_no    = 100
-  #   action     = "allow"
-  #   cidr_block = "0.0.0.0/0"
-  #   from_port  = 0
-  #   to_port    = 0
-  #   icmp_code  = 0
-  #   icmp_type  = 0
-  # }
-
-  # ingress {
-  #   protocol = "-1"
-  #   rule_no    = 101
-  #   action     = "allow"
-  #   ipv6_cidr_block = "::/0"
-  #   from_port  = 0
-  #   to_port    = 0
-  #   icmp_code  = 0
-  #   icmp_type  = 0
-  # }
+  }
 
   tags = {
     Name = "${local.resource_prefix}-common"
