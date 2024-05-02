@@ -66,6 +66,9 @@ resource "aws_default_security_group" "sg_default" {
     cidr_blocks = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
   }
+  tags = {
+    Name = "${local.resource_prefix}-default"
+  }
 }
 
 # Import existing: terraform import aws_subnet.subnet_dualstack_1a <AWS Resource ID>
@@ -246,6 +249,7 @@ resource "aws_acm_certificate" "vpn_gw_cert" {
 }
 
 resource "aws_security_group" "sg_client_vpn" {
+  name = "${local.resource_prefix}-vpn-clients"
   vpc_id     = aws_vpc.vpc_dualstack.id
 
   egress {
@@ -263,7 +267,7 @@ resource "aws_security_group" "sg_client_vpn" {
     to_port    = 0
   }
   tags = {
-    Name = "${local.resource_prefix}-common"
+    Name = "${local.resource_prefix}-vpn-clients"
   }
 }
 
@@ -349,8 +353,9 @@ resource aws_route53_resolver_endpoint "vpn_dns" {
   }
  }
 
+# Allow every VPN client to access internal DNS, too.
 resource aws_security_group "vpn_dns_sg" {
-   name = "${local.resource_prefix}-common"
+   name = "${local.resource_prefix}-vpn-dns"
    vpc_id = aws_vpc.vpc_dualstack.id
    ingress {
      from_port = 0
@@ -365,7 +370,10 @@ resource aws_security_group "vpn_dns_sg" {
      cidr_blocks = ["0.0.0.0/0"]
      ipv6_cidr_blocks = ["::/0"]
    }
- }
+  tags = {
+    Name = "${local.resource_prefix}-vpn-dns"
+  }
+}
 
 # data "template_file" "aws_openvpn_configs" {
 #   for_each = client_names
